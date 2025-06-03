@@ -1,4 +1,5 @@
 from pomegranate.distributions import Categorical, ConditionalCategorical
+from pomegranate.bayesian_network import BayesianNetwork
 import torch
 
 ##====Root Nodes====
@@ -198,3 +199,44 @@ probs_tablet_weight = [
     [[0.25, 0.55, 0.2], [0.23, 0.56, 0.21], [0.21, 0.55, 0.24]],
 ]
 tablet_weight_var = ConditionalCategorical(probs=torch.tensor(probs_tablet_weight))
+
+#Create the distribution list for modeling
+distributions_var = [API_types,
+                 milling_parameters,
+                 blending_settings,
+                 granulation_parameters,
+                 drying_parameters,
+                 compression_settings,
+                 coating_parametres,
+                 packaging_humidity,
+                 granule_size,
+                 blend_uniformity,
+                 moisture_content,
+                 powder_floability,
+                 assay,
+                 content_unif,
+                 tablet_hardness,
+                 dissolution_rate,
+                 tablet_weight_var]
+
+# Create the edges list
+edges_var =[(API_types, granule_size),
+        (API_types, assay), 
+        (milling_parameters, granule_size),
+        (blending_settings, blend_uniformity),
+        (granulation_parameters, granule_size),
+        (drying_parameters, moisture_content),
+        (compression_settings, tablet_hardness),
+        (compression_settings, tablet_weight_var),
+        (coating_parametres, dissolution_rate),
+        (packaging_humidity, dissolution_rate),
+        (granule_size, powder_floability),
+        (granule_size, tablet_hardness),
+        (granule_size, dissolution_rate),
+        (blend_uniformity, content_unif),
+        (moisture_content, tablet_hardness),
+        (moisture_content, dissolution_rate),
+        (powder_floability, tablet_weight_var),
+           ] 
+model = BayesianNetwork(distributions=distributions_var, edges=edges_var)
+print(model)
