@@ -45,4 +45,4 @@ bayesian-quality-control/
 
 I'm Alexey — I switched from a decade in pharma quality assurance (J&J, Abbott) to data science. I like building things that are both practical and mathematically interesting. This project blends both.
 
-♟️ Also into chess, swimming, and books I never finish.
+♟️ Chess, literature, and wine appreciation are a few of my favorite pastimes.
