@@ -2,6 +2,7 @@ from pomegranate.distributions import Categorical, ConditionalCategorical
 from pomegranate.bayesian_network import BayesianNetwork
 import torch
 import pandas as pd
+import matplotlib.pyplot as plt
 
 
 ##====Root Nodes====
@@ -184,9 +185,9 @@ tablet_weight_var = ConditionalCategorical(probs=[probs_tablet_weight])
 
 #Create the distribution list for modeling
 distributions_var = [API_types,
-                 milling_parameters,
-                 blending_settings,
                  granulation_parameters,
+                 milling_parameters, 
+                 blending_settings,
                  drying_parameters,
                  compression_settings,
                  coating_parametres,
@@ -244,6 +245,11 @@ structure_var = [
     (5, 11),       # tablet_weight_var <- compression_settings, powder_floability
 ]
 model = BayesianNetwork(distributions=distributions_var, structure= structure_var, edges=edges_var)
-#print(model)
-sample = model.sample(n = 1000)
-print(sample[0:5])
+
+samples = model.sample(10000)
+df = pd.DataFrame(samples.numpy(), columns=[f'Node_{i}' for i in range(len(samples[0]))])
+print (df.head())
+
+import pickle
+with open("manuf_baeysian_model.pkl", "wb") as f:
+    pickle.dump(model, f)
