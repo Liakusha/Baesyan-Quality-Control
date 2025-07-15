@@ -31,6 +31,17 @@ nodes_name = ["API types",
               "Dissolution Rate",
               "Tablet Weight Variation"]
 
+#List of root nodes
+root_nodes = ["API types",
+              "Granulation parameters",
+              "Milling settings",
+              "Blending Settings",
+              "Drying parameters", 
+              "Compression Settings",
+              "Coating Parametres",
+              "Packaging Humidity"
+              ]
+
 
 #Map our nodes in readeble format
 value_maps = {"API types": {0:"Type A", 1: "Type B"},
@@ -54,7 +65,7 @@ value_maps = {"API types": {0:"Type A", 1: "Type B"},
 
 
 # Quantity of samples
-N_SAMPLES = 10
+N_SAMPLES = 500
 
 # Present our samples as DataFrame in readble format 
 samples = pd.DataFrame((model.sample(N_SAMPLES)).numpy(), columns=[f'Node_{i}' for i in range(len((model.sample(N_SAMPLES))[0]))])
@@ -68,7 +79,7 @@ samples = samples.apply(lambda col: col.replace(value_maps[col.name]))
 #labels = list(value_maps["API types"].values())
 #true_probs = dict(zip(labels, probs_tensor.squeeze().tolist()))
 
-# Perform the true probabilities from the model
+# Extract true probabilities from the model for root nodes
 true_distributions = {}
 
 for i, node_name in enumerate(nodes_name):
@@ -86,7 +97,7 @@ for node in nodes_name:
     empirical_probs = samples[node].value_counts(normalize=True).to_dict()
     empirical_distributions[node] = empirical_probs
 
-#Plot comparison between true and emperical probabilities
+#Plot comparison between true and emperical probabilities for root nodes
 def compare_distributions(node, true_probs, emp_probs):
     #Set of labels
     all_labels = sorted(set(true_probs) | set(emp_probs))
@@ -110,18 +121,94 @@ def compare_distributions(node, true_probs, emp_probs):
     plt.tight_layout()
     plt.show()
 
+node = "Blending Settings"
+true = true_distributions[node]
+emp = empirical_distributions[node]
+#compare_distributions(node, true, emp)
+
+# Create summary for comaprison for root nodes
 summary = []
 
-for node in nodes_name:
+for node in root_nodes:
     labels = sorted(set(true_distributions[node].keys()) | set(empirical_distributions[node].keys()))
     t_vec = [true_distributions[node].get(k, 0) for k in labels]
     e_vec = [empirical_distributions[node].get(k, 0) for k in labels]
     
-    #l1 = np.sum(np.abs(np.array(t_vec) - np.array(e_vec)))
-    #kl = entropy(pk=t_vec, qk=e_vec) if all(p > 0 for p in e_vec) else float('nan')
-    ##summary.append((node, round(l1, 4), round(kl, 4)))
+    l1 = np.sum(np.abs(np.array(t_vec) - np.array(e_vec)))
+    kl = entropy(pk=t_vec, qk=e_vec) if all(p > 0 for p in e_vec) else float('nan')
+    summary.append((node, round(l1, 4), round(kl, 4)))
 
 #for row in summary:
     #print(f"{row[0]:<25} | L1: {row[1]:.4f} | KL: {row[2]:.4f}")
-print("t_vec:", t_vec)
-print("e_vec:", e_vec)
+
+#Function to find parents for nodes
+def get_parents(node_name, nodes_name, structure):
+    node_idx = nodes_name.index(node_name)
+    parent_indices = structure[node_idx]
+    return [nodes_name[i] for i in parent_indices]
+
+from collections import defaultdict
+
+# Function to calculate emperical probs in cond nodes
+def compute_empirical_cpd(samples, target_node, parents):
+    grouped = samples.groupby(parents)[target_node].value_counts(normalize=True)
+    grouped = grouped.rename("prob").reset_index()
+    
+    result = defaultdict(dict)
+    
+    for _, row in grouped.iterrows():
+        parent_vals = tuple(row[p] for p in parents)
+        target_val = row[target_node]
+        prob = row["prob"]
+        result[parent_vals][target_val] = prob
+    
+    return result
+
+#Function to extract probs from model
+def extract_true_conditional_cpd(node_name, model, nodes_name, value_maps):
+    idx = nodes_name.index(node_name)
+    dist = model.distributions[idx]
+    probs = list(dist.parameters())[1]  # still a tensor, probably shape (3, 3, 3)
+
+    parent_names = get_parents(node_name, nodes_name, model.structure)
+    parent_categories = [list(value_maps[parent].values()) for parent in parent_names]
+    child_categories = list(value_maps[node_name].values())
+
+    from itertools import product
+    combinations = list(product(*parent_categories))
+
+    # Flatten probs to match combinations
+    probs_flat = list(probs.reshape(len(combinations), -1))  # shape (9, 3)
+
+    result = {}
+    for parent_vals, child_probs in zip(combinations, probs_flat):
+        result[parent_vals] = dict(zip(child_categories, child_probs.tolist()))
+    return result
+
+true_cpd_granul_size = extract_true_conditional_cpd("Dissolution Rate", model, nodes_name, value_maps)
+emp_cpd_granul_size = compute_empirical_cpd(samples, "Dissolution Rate", get_parents("Dissolution Rate", nodes_name, model.structure) )
+
+
+#function to compare conditional distribution
+def compare_conditional_distributions(node, true_cpd, empirical_cpd):
+    summary = []
+    
+    for parent_values in true_cpd:
+        true_dist = true_cpd[parent_values]
+        emp_dist = empirical_cpd.get(parent_values, {})
+        
+        all_labels = sorted(set(true_dist) | set(emp_dist))
+        
+        t_vec = [true_dist.get(k, 0.0) for k in all_labels]
+        e_vec = [emp_dist.get(k, 0.0) for k in all_labels]
+        
+        l1 = np.sum(np.abs(np.array(t_vec) - np.array(e_vec)))
+        kl = entropy(pk=t_vec, qk=e_vec) if all(p > 0 for p in e_vec) else float("nan")
+        
+        summary.append((parent_values, round(l1, 4), round(kl, 4)))
+    
+    return summary
+
+print(compute_empirical_cpd(samples, "Dissolution Rate", get_parents("Dissolution Rate", nodes_name, model.structure)))
+
+
