@@ -65,7 +65,7 @@ value_maps = {"API types": {0:"Type A", 1: "Type B"},
 
 
 # Quantity of samples
-N_SAMPLES = 500
+N_SAMPLES = 50000
 
 # Present our samples as DataFrame in readble format 
 samples = pd.DataFrame((model.sample(N_SAMPLES)).numpy(), columns=[f'Node_{i}' for i in range(len((model.sample(N_SAMPLES))[0]))])
@@ -168,7 +168,7 @@ def compute_empirical_cpd(samples, target_node, parents):
 def extract_true_conditional_cpd(node_name, model, nodes_name, value_maps):
     idx = nodes_name.index(node_name)
     dist = model.distributions[idx]
-    probs = list(dist.parameters())[1]  # still a tensor, probably shape (3, 3, 3)
+    probs = list(dist.parameters())[1]  # tensor, probably shape (3, 3, 3)
 
     parent_names = get_parents(node_name, nodes_name, model.structure)
     parent_categories = [list(value_maps[parent].values()) for parent in parent_names]
@@ -185,8 +185,8 @@ def extract_true_conditional_cpd(node_name, model, nodes_name, value_maps):
         result[parent_vals] = dict(zip(child_categories, child_probs.tolist()))
     return result
 
-true_cpd_granul_size = extract_true_conditional_cpd("Dissolution Rate", model, nodes_name, value_maps)
-emp_cpd_granul_size = compute_empirical_cpd(samples, "Dissolution Rate", get_parents("Dissolution Rate", nodes_name, model.structure) )
+true_cpd_granul_size = extract_true_conditional_cpd("Granule Size", model, nodes_name, value_maps)
+emp_cpd_granul_size = compute_empirical_cpd(samples, "Granule Size", get_parents("Granule Size", nodes_name, model.structure) )
 
 
 #function to compare conditional distribution
@@ -209,6 +209,26 @@ def compare_conditional_distributions(node, true_cpd, empirical_cpd):
     
     return summary
 
-print(compute_empirical_cpd(samples, "Dissolution Rate", get_parents("Dissolution Rate", nodes_name, model.structure)))
+comp_result = compare_conditional_distributions("Granule Size", true_cpd_granul_size, emp_cpd_granul_size)
 
+#Create DataFrame with comparison resutls
+df = pd.DataFrame(comp_result, columns=['Parent Configuration', 'L1 Distance', 'KL Divergence'])
 
+#Prepare data for plotting
+labels = ['\n'.join(p) for p, _, _ in comp_result]
+l1_scores = [l1 for _, l1, _ in comp_result]
+kl_scores = [kl if not np.isnan(kl) else 0 for _, _, kl in comp_result]
+
+x = np.arange(len(labels))
+width = 0.4
+
+# Plot the comparison results
+plt.figure(figsize=(12, 6))
+plt.bar(x - width/2, l1_scores, width=width, label="L1 Distance", color="steelblue")
+plt.bar(x + width/2, kl_scores, width=width, label="KL Divergence", color="orange")
+plt.xticks(x, labels, rotation=90)
+plt.title("Granule Size | L1 vs KL per Parent Configuration")
+plt.ylabel("Distance")
+plt.legend()
+plt.tight_layout()
+plt.show()
